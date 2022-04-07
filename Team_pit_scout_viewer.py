@@ -29,15 +29,23 @@ def main():
     cursor = con.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     cursor.execute("SELECT json FROM revs where doc_type = 'pit'")
-    df_user_results = pd.read_sql_query("SELECT json FROM revs where doc_type = 'pit'", con)
+    df_pit_results = pd.read_sql_query("SELECT json FROM revs where doc_type = 'pit'", con)
     col_names = list(map(lambda x: x[0], cursor.description))
     results = cursor.fetchall()
-    df_user_results_e = df_user_results.join(df_user_results['json'].apply(json.loads).apply(pd.Series))
-    df_pit_results = df_user_results_e.join(pd.DataFrame(list(df_user_results_e['data'])))
+    df_pit_results_e = df_pit_results.join(df_pit_results['json'].apply(json.loads).apply(pd.Series))
+    df_pit_results = df_pit_results_e.join(pd.DataFrame(list(df_pit_results_e['data'])))
     cols = ['team_key', 'length', 'width', 'height', 'weight', 'drivetrain', 'external_intake',
         'retract_intake', 'cargo_scorer', 'vision', 'auto_location', 'auto_drives', 'auto_shots_high',
         'auto_shots_low', 'climb_height', 'climb_time']
     df_pit_results_e = df_pit_results[cols]
+
+    cursor.execute("SELECT json FROM revs where doc_type = 'notes'")
+    df_notes_results = pd.read_sql_query("SELECT json FROM revs where doc_type = 'notes'", con)
+    results = cursor.fetchall()
+    df_notes_results_e = df_notes_results.join(df_notes_results['json'].apply(json.loads).apply(pd.Series))
+    df_notes_results_e = df_notes_results_e.join(pd.DataFrame(list(df_notes_results_e['notes'])))
+    df_notes_results_e = df_notes_results_e[['team_key','notes']]
+
     
     app = dash.Dash()
 
@@ -73,10 +81,13 @@ def main():
     def update_data(value):
         print(f'frc{value}')
         pd.options.display.max_colwidth =10000
-        out = df_pit_results_e[df_pit_results_e['team_key']==f'frc{value}']
-        #out = out.replace(',', '\n')
-        print(out.T.to_string())
-        return out.T.to_string()
+        out_pit = df_pit_results_e[df_pit_results_e['team_key']==f'frc{value}']
+        out_notes = df_notes_results_e[df_notes_results_e['team_key']==f'frc{value}']
+        print(out_pit.T.to_string())
+        print(list(out_notes['notes'].to_dict().values()))
+        #print(list(out_notes.to_dict().values()))
+        #print("\n".join(out_notes))
+        return out_pit.T.to_string() + "\n\n\n-Begin Notes:-\n" + "\n".join(list(out_notes['notes'].to_dict().values())[0])
 
     @app.callback(Output('image', 'children'),
                   [Input('interval', 'n_intervals'),
