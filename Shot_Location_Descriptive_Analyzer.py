@@ -141,7 +141,7 @@ def filter_data(df_user_results_e, df_tba_results_alliances, teams_to_include=[]
 def main():
     # ---- Data Ingest and Mergeing
     # --- Connect to our database and extract info ---
-    con = sqlite3.connect("/home/skye/Documents/Scripts/FRC/2022/scouting/cblite/wildrank.cblite2/db.sqlite3")
+    con = sqlite3.connect("/home/skye/Documents/Scripts/FRC/2022/scouting/cblite_lakeview_m52/wildrank.cblite2/db.sqlite3")
     cursor = con.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     
@@ -200,7 +200,7 @@ def main():
 
 
     goal_dict = {"Unknown":0, "Upper":1, "Lower":2}
-    aggregation_dict = {"Match Normalized Percentages":0, "All Recorded Shots":1}
+    aggregation_dict = {"Matchwise Normalized Percentages":0, "All Recorded Shots":1}
 
     #Plot the overall the key to these bivariate shooting location miss vs score data
     x_size,y_size = 200,200
@@ -214,7 +214,10 @@ def main():
 
     app.layout = html.Div([
         html.H4('Interactive plot for team shooting locations'),
-        dcc.Graph(id="scatter-plot"),
+        html.Div([
+            dcc.Graph(id="scatter-plot", style={'display':'flex', 'flex-direction':'row', 'flex-grow':4}),
+            html.Img(id='legend', style={'display':'flex', 'flex-direction':'row', 'flex-grow':1})
+            ], style={'display':'flex', 'flex-direction':'row', 'vertical-align': 'top', 'margin-left': '3vw', 'margin-top': '3vw'}),
         
         #html.H4('Range Clipping'),
         #dcc.RangeSlider(
@@ -280,7 +283,7 @@ def main():
                                     locs_data['scored_by_loc'].to_numpy(),
                                     all_locs_data['missed_by_loc'].to_numpy(),
                                     all_locs_data['scored_by_loc'].to_numpy())
-        else if aggregation_method == 1:
+        elif aggregation_method == 1:
                         bi_colors, _bi_z_plot = colorFromBivariateData(locs_data['missed_by_loc_raw'].to_numpy(),
                                     locs_data['scored_by_loc_raw'].to_numpy(),
                                     all_locs_data['missed_by_loc_raw'].to_numpy(),
@@ -303,46 +306,28 @@ def main():
         fig.update_layout(
             margin=dict(l=20, r=20, t=20, b=20),
             template='plotly_white')
+        fig.update_layout(showlegend=False)
 
         # "boundry lines" are the edge lines in plotly
-        for (x, y, c) in zip(x_polygons, y_polygons, bi_colors):
+        for (x, y, c, p) in zip(x_polygons, y_polygons, bi_colors, locs_data['scored_pct_by_loc'].to_numpy()):
             #print(f'rgb{tuple(list(map(int,c[:3]*255)))}')
             fig.add_trace( go.Scatter(x=x, y=y, fill="toself", 
                                       mode = 'none',
                                       fillcolor = f'rgba{tuple(list(map(int,c*255)))}',                         
-                                      name = f"c ={c}"),
+                                      name = f"c ={p}"),
                                       row=1, col=1)
-        
-        #fig_img = px.imshow(C_map, origin='lower')
-        #fig.add_trace(fig_img, row=1, col=2)   
-        #img = Image.open('/home/skye/Documents/Scripts/FRC/2022/scouting/value_key.png')
-        #fig.add_trace(go.Image(z=img), row=1, col=2)
-
         return fig
 
+    @app.callback(
+        Output('legend', 'src'),
+        [Input('teams-to-analyze', 'value')])
+    def update_image_src(value):
+        return '/home/skye/Documents/Scripts/FRC/2022/scouting/value_key.png'
+    @app.server.route('/home/skye/Documents/Scripts/FRC/2022/scouting/value_key.png')
+    def serve_image():
+        return flask.send_from_directory('/home/skye/Documents/Scripts/FRC/2022/scouting/', 'value_key.png')
 
-    app.run_server(debug=True)
-
-    ''' def update_bar_chart(slider_range):
-            values = [1.1 , 2.2, 3.2, 1.2, 3, 4.2, 2.8, 4.9]
-            vmin = 0 #values.min()
-            vmax = 10 #values.max()
-            vmin, vmax = slider_range
-            pl_colors = plotly.colors.sequential.Viridis
-
-            fig = go.Figure()
-            fig.update_yaxes(scaleanchor = "x",scaleratio = 1)
-
-            # "boundry lines" are the edge lines in plotly
-            for (x, y, v) in zip(x_polygons, y_polygons, values):    
-                fig.add_trace( go.Scatter(x=x, y=y, fill="toself", 
-                                          mode = 'none',
-                                          fillcolor = str(get_colors_for_vals(np.array([v]), vmin, vmax, pl_colors)[0]),                            
-                                          name = f"v ={v}",                               
-                                         )
-                              
-                             )
-            return fig'''
+    app.run_server(port=8052,debug=True)
 
 if __name__ == '__main__':
     main()

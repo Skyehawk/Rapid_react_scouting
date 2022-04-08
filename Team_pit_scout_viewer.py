@@ -69,25 +69,12 @@ def main():
             html.Div([
                 dcc.Textarea(id='pit_data',
                             value='Textarea content initialized\nwith multiple lines of text',
-                            style={'width': '300%', 'height': '100%',  'fontSize': '24px'},
+                            style={'width': '250%', 'height': '100%',  'fontSize': '24px'},
                 ),
             ]),
 
         ], style = {'display':'flex', 'flex-direction':'row'}),
     ])
-
-    @app.callback(Output('pit_data','value'),
-                  Input('image-dropdown','value'))
-    def update_data(value):
-        print(f'frc{value}')
-        pd.options.display.max_colwidth =10000
-        out_pit = df_pit_results_e[df_pit_results_e['team_key']==f'frc{value}']
-        out_notes = df_notes_results_e[df_notes_results_e['team_key']==f'frc{value}']
-        print(out_pit.T.to_string())
-        print(list(out_notes['notes'].to_dict().values()))
-        #print(list(out_notes.to_dict().values()))
-        #print("\n".join(out_notes))
-        return out_pit.T.to_string() + "\n\n\n-Begin Notes:-\n" + "\n".join(list(out_notes['notes'].to_dict().values())[0])
 
     @app.callback(Output('image', 'children'),
                   [Input('interval', 'n_intervals'),
@@ -97,7 +84,7 @@ def main():
         for x in range(divisor):
             if n == None or n % divisor == x:
                 return html.Img(src = image_directory + value + f'_{x+1}'+ extension, 
-                                style={'height':'90%', 'width':'90%'})
+                                style={'height':'80%', 'width':'80%'})
 
     # Add a static image route that serves images from desktop
     # Be *very* careful here - you don't want to serve arbitrary files
@@ -108,6 +95,17 @@ def main():
         if image_name not in list_of_images:
             raise Exception(f'"{image_path}" is excluded from the allowed static files')
         return flask.send_from_directory(image_directory, image_name)
+
+    @app.callback(Output('pit_data','value'),
+                  Input('image-dropdown','value'))
+    def update_data(value):
+        print(f'frc{value}')
+        pd.options.display.max_colwidth =10000
+        out_pit = df_pit_results_e[df_pit_results_e['team_key']==f'frc{value}']
+        out_notes = df_notes_results_e[df_notes_results_e['team_key']==f'frc{value}']
+        print(out_pit.T.to_string())
+        print(list(out_notes['notes'].to_dict().values()))
+        return out_pit.T.to_string() + "\n\n\n-Begin Notes:-\n--> " + "\n--> ".join(list(out_notes['notes'].to_dict().values())[0])
 
     app.run_server(debug=True)
 
