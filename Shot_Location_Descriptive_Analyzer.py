@@ -200,12 +200,13 @@ def main():
 
 
     goal_dict = {"Unknown":0, "Upper":1, "Lower":2}
-    aggregation_dict = {"Matchwise Normalized Percentages":0, "All Recorded Shots":1}
+    aggregation_dict = {"Match-wise Normalized Percentages":0, "All Recorded Shots":1}
 
     #Plot the overall the key to these bivariate shooting location miss vs score data
-    x_size,y_size = 200,200
-    xx, yy = np.mgrid[-x_size/2:x_size/2,-y_size/2:y_size/2]
-    C_map, zplot = colorFromBivariateData(xx,yy,xx,yy)     #the underlying colors are the bivariate key for the loc plot, all locs are independ to eachother
+    # We are just using a picture instead of generating this each time
+    #x_size,y_size = 200,200
+    #xx, yy = np.mgrid[-x_size/2:x_size/2,-y_size/2:y_size/2]
+    #C_map, zplot = colorFromBivariateData(xx,yy,xx,yy)     #the underlying colors are the bivariate key for the loc plot, all locs are independ to eachother
 
     # ---- App Definitions ----
     # Layout 
