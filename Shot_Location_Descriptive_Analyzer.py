@@ -54,8 +54,8 @@ def colorFromBivariateData(Z1,Z2,A1,A2,cmap1 = plt.cm.RdBu, cmap2 = plt.cm.PRGn)
         #Normaize by global values for that location,
         #Rescale values to fit into colormap range (0->255)
     '''
-    Z1_plot = np.array(128+(255*((np.subtract(A1,Z1)/A2))), dtype=int)
-    Z2_plot = np.array(128+(255*((np.subtract(A2,Z2)/A2))), dtype=int)
+    Z1_plot = np.array(128+(255*((np.subtract(A1,Z1)/Z1))), dtype=int)
+    Z2_plot = np.array(128+(255*((np.subtract(A2,Z2)/Z2))), dtype=int)
 
     Z1_color = cmap1(Z1_plot)
     Z2_color = cmap2(Z2_plot)
@@ -64,6 +64,13 @@ def colorFromBivariateData(Z1,Z2,A1,A2,cmap1 = plt.cm.RdBu, cmap2 = plt.cm.PRGn)
     Z_color = np.sum([Z1_color, Z2_color], axis=0)/2.0
 
     return Z_color, np.vstack((Z1_plot/255, Z2_plot/255))
+
+# Plotting
+def colorFromUnivariateData(Z1, A1, cmap1 = plt.cm.Blues):
+    Z1_plot = np.array((255*(Z1)), dtype=int)
+    Z1_color = cmap1(Z1_plot)
+    # Color for each point
+    return Z1_color, Z1_plot
 
 def filter_data(df_user_results_e, df_tba_results_alliances, teams_to_include=[], teams_to_exclude=['frc000'], goal_to_analyze=1):
     teams_with_data = df_user_results_e['team_key'].unique()
@@ -129,13 +136,14 @@ def filter_data(df_user_results_e, df_tba_results_alliances, teams_to_include=[]
         all_cycle_locs = all_cycle_locs.append(df[['loc','target_goal','missed_shot','defended_shot','match_idx']])
 
     all_locs_data = pd.DataFrame(np.arange(0,10,1)).drop(index=0)                  #create df w/ index column w/ ALL POSSIBLE locations
-    all_locs_data['scored_by_loc_raw'] = all_cycle_locs['loc'].where((all_cycle_locs['target_goal'] == goal_to_analyze)&(all_cycle_locs['missed_shot'] == 0)).value_counts()
-    all_locs_data['missed_by_loc_raw'] = all_cycle_locs['loc'].where((all_cycle_locs['target_goal'] == goal_to_analyze)&(all_cycle_locs['missed_shot'] == 1)).value_counts()
+    all_locs_data['scored_by_loc_raw'] = all_cycle_locs['loc'].where((all_cycle_locs['target_goal'] == goal_to_analyze)&(all_cycle_locs['missed_shot'] == 0)).value_counts()/len(teams_to_include)
+    all_locs_data['missed_by_loc_raw'] = all_cycle_locs['loc'].where((all_cycle_locs['target_goal'] == goal_to_analyze)&(all_cycle_locs['missed_shot'] == 1)).value_counts()/len(teams_to_include)
     all_locs_data['scored_by_loc'] = all_cycle_locs['loc'].where((all_cycle_locs['target_goal'] == goal_to_analyze)&(all_cycle_locs['missed_shot'] == 0)).value_counts()/len(all_cycle_locs['target_goal'])
     all_locs_data['missed_by_loc'] = all_cycle_locs['loc'].where((all_cycle_locs['target_goal'] == goal_to_analyze)&(all_cycle_locs['missed_shot'] == 1)).value_counts()/len(all_cycle_locs['target_goal'])
 
     all_locs_data.fillna(0, inplace=True)                                         #fill with 0 so our plotting can handle it
     all_locs_data['scored_pct_by_loc'] = all_locs_data['scored_by_loc_raw']/(all_locs_data['scored_by_loc_raw']+all_locs_data['missed_by_loc_raw'])
+    print(all_locs_data.head(9))
     return all_locs_data
 
 def main():
@@ -200,6 +208,7 @@ def main():
 
 
     goal_dict = {"Unknown":0, "Upper":1, "Lower":2}
+    stat_dict = {"Loc Probability":0, "CV":1, "Percentage":2, "Bivariate Departures":3}
     aggregation_dict = {"Match-wise Normalized Percentages":0, "All Recorded Shots":1}
 
     #Plot the overall the key to these bivariate shooting location miss vs score data
@@ -234,12 +243,19 @@ def main():
                 options=[{'label': i, 'value': goal_dict.get(i)} for i in list(goal_dict.keys())],
                 value=goal_dict.get("Upper"))
                 ], style={'width':'30%'}),
+            html.Div([    
+                html.H4('Stat'),
+                dcc.Dropdown(
+                id='stat',
+                options=[{'label': i, 'value': stat_dict.get(i)} for i in list(stat_dict.keys())],
+                value=stat_dict.get("Bivariate Departures"))
+                ], style={'width':'30%'}),
             html.Div([
                 html.H4('Aggregation Method'),
                 dcc.Dropdown(
                 id='aggregation-method',
                 options=[{'label': i, 'value': aggregation_dict.get(i)} for i in list(aggregation_dict.keys())],
-                value=aggregation_dict.get("All Recorded Shots"))
+                value=aggregation_dict.get("Match-wise Normalized Percentages"))
                 ], style={'width':'30%'})
             ], style = {'display':'flex', 'flex-direction':'row'}),
 
@@ -270,8 +286,9 @@ def main():
         Input("aggregation-method", "value"), 
         Input("teams-to-analyze", "value"),
         Input("teams-as-baseline", "value"),
-        Input("teams-exclude-from-baseline", "value"))
-    def update_chart(goal_to_analyze, aggregation_method, teams_to_analyze, teams_as_baseline, teams_to_exclude):
+        Input("teams-exclude-from-baseline", "value"),
+        Input("stat", "value"))
+    def update_chart(goal_to_analyze, aggregation_method, teams_to_analyze, teams_as_baseline, teams_to_exclude, stat):
         if not isinstance(teams_to_analyze, list): teams_to_analyze = [teams_to_analyze]    # take care of the annoying loose typing from dash
         if not isinstance(teams_to_exclude, list): teams_to_exclude = [teams_to_exclude]    # take care of the annoying loose typing from dash
         locs_data = filter_data(df_user_results_e, df_tba_results_alliances,
@@ -279,23 +296,32 @@ def main():
         all_locs_data = filter_data(df_user_results_e, df_tba_results_alliances,
                                 teams_to_include=teams_as_baseline, teams_to_exclude=teams_to_exclude,
                                 goal_to_analyze=goal_to_analyze)
-        if aggregation_method == 0:
-            bi_colors, _bi_z_plot = colorFromBivariateData(locs_data['missed_by_loc'].to_numpy(),
-                                    locs_data['scored_by_loc'].to_numpy(),
-                                    all_locs_data['missed_by_loc'].to_numpy(),
-                                    all_locs_data['scored_by_loc'].to_numpy())
-        elif aggregation_method == 1:
-                        bi_colors, _bi_z_plot = colorFromBivariateData(locs_data['missed_by_loc_raw'].to_numpy(),
-                                    locs_data['scored_by_loc_raw'].to_numpy(),
-                                    all_locs_data['missed_by_loc_raw'].to_numpy(),
-                                    all_locs_data['scored_by_loc_raw'].to_numpy())
+        colors = []
+        if stat == 0:
+            colors, _uni_z_plot = colorFromUnivariateData(locs_data['scored_by_loc'], all_locs_data['scored_by_loc'])
+        elif stat == 1:
+            a = 2
+        elif stat == 2:
+            colors, _uni_z_plot = colorFromUnivariateData(locs_data['scored_pct_by_loc'], all_locs_data['scored_pct_by_loc'])
+        elif stat == 3:    
+            if aggregation_method == 0:
+                            colors, _bi_z_plot = colorFromBivariateData(locs_data['missed_by_loc'].to_numpy(),
+                                        locs_data['scored_by_loc'].to_numpy(),
+                                        all_locs_data['missed_by_loc'].to_numpy(),
+                                        all_locs_data['scored_by_loc'].to_numpy())
+            elif aggregation_method == 1:
+                            colors, _bi_z_plot = colorFromBivariateData(locs_data['missed_by_loc_raw'].to_numpy(),
+                                        locs_data['scored_by_loc_raw'].to_numpy(),
+                                        all_locs_data['missed_by_loc_raw'].to_numpy(),
+                                        all_locs_data['scored_by_loc_raw'].to_numpy())
 
-        for idx in range(len(x_polygons)):
-            attempts = locs_data.iloc[idx, locs_data.columns.get_loc('scored_by_loc')] +  \
-                locs_data.iloc[idx, locs_data.columns.get_loc('missed_by_loc')]
-            if(attempts == 0.0):
-                bi_colors[idx][3] = 0
+            for idx in range(len(x_polygons)):
+                attempts = locs_data.iloc[idx, locs_data.columns.get_loc('scored_by_loc')] +  \
+                    locs_data.iloc[idx, locs_data.columns.get_loc('missed_by_loc')]
+                if(attempts == 0.0):
+                    colors[idx][3] = 0
 
+        #print(colors)
         
         fig = make_subplots(
             rows=1, cols=2,
@@ -310,12 +336,12 @@ def main():
         fig.update_layout(showlegend=False)
 
         # "boundry lines" are the edge lines in plotly
-        for (x, y, c, p) in zip(x_polygons, y_polygons, bi_colors, locs_data['scored_pct_by_loc'].to_numpy()):
+        for (x, y, c, v) in zip(x_polygons, y_polygons, colors, all_locs_data['scored_by_loc'].to_numpy()):
             #print(f'rgb{tuple(list(map(int,c[:3]*255)))}')
             fig.add_trace( go.Scatter(x=x, y=y, fill="toself", 
                                       mode = 'none',
                                       fillcolor = f'rgba{tuple(list(map(int,c*255)))}',                         
-                                      name = f"c ={p}"),
+                                      name = f"c ={v}"),
                                       row=1, col=1)
         return fig
 
